@@ -1,14 +1,17 @@
 """엔트리 포인트."""
 
-from config import Settings
+import sys
+
+from config import Settings, record_video_entry
 from exporters import JSONExporter, MarkdownExporter
 from gemini_client import GeminiVideoClient
 from summarizer import LectureSummarizer
-from utils import print_title
+from utils import get_youtube_title, print_title, sanitize_filename
 
 
 def main() -> None:
-    settings = Settings.load()
+    cli_url = sys.argv[1] if len(sys.argv) > 1 else None
+    settings = Settings.load(cli_url=cli_url)
 
     client = GeminiVideoClient(
         api_key=settings.api_key,
@@ -22,11 +25,17 @@ def main() -> None:
     print(f"주제 : {result.topic_guess}")
     print(f"구간 수 : {len(result.sections)}")
 
-    json_path = settings.output_dir / "lecture_summary.json"
-    md_path = settings.output_dir / "lecture_summary.md"
+    video_title = get_youtube_title(settings.url_path)
+    video_output_dir = settings.output_dir / sanitize_filename(video_title)
+    video_output_dir.mkdir(parents=True, exist_ok=True)
+
+    json_path = video_output_dir / "lecture_summary.json"
+    md_path = video_output_dir / "lecture_summary.md"
 
     JSONExporter().export(result, json_path)
     MarkdownExporter().export(result, md_path)
+
+    record_video_entry(video_title, settings.url_path)
 
     print_title("저장 완료")
     print(f"JSON              : {json_path}")
