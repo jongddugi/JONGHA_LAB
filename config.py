@@ -45,6 +45,25 @@ def _normalize_youtube_url(url: str) -> str:
     return f"https://www.youtube.com/watch?v={video_id}"
 
 
+def _parse_video_url_file(text: str) -> dict[str, str]:
+    """'제목=URL' 형식의 줄들을 파싱해 {제목: URL} 딕셔너리로 만든다.
+
+    빈 줄과 '#'으로 시작하는 주석 줄은 무시한다.
+    """
+    entries: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise ValueError(
+                f"{URL_FILE.name}의 다음 줄을 '제목=URL' 형식으로 해석할 수 없습니다: {line}"
+            )
+        key, _, url = line.partition("=")
+        entries[key.strip()] = url.strip()
+    return entries
+
+
 @dataclass(frozen=True)
 class Settings:
     """스크립트 실행에 필요한 설정값을 한 곳에 모아둔 객체.
@@ -60,7 +79,7 @@ class Settings:
 
     @classmethod
     def load(cls) -> "Settings":
-        """.env 파일에서 API 키를, video_url.txt 파일에서 유튜브 URL을 읽어
+        """.env 파일에서 API 키를, VIDEO_URL.txt 파일에서 유튜브 URL을 읽어
         Settings 객체로 만든다.
         """
         env_path = BASE_DIR / ".env"
@@ -78,17 +97,35 @@ class Settings:
         if not URL_FILE.exists():
             raise FileNotFoundError(
                 f"{URL_FILE.name} 파일을 찾을 수 없습니다. "
-                "이 파일을 만들고 요약할 유튜브 영상 URL을 한 줄로 적어두세요."
+                "이 파일을 만들고 '제목=URL' 형식으로 한 줄 이상 적어두세요."
             )
 
-        url_path = URL_FILE.read_text(encoding="utf-8").strip()
-        if not url_path:
+        entries = _parse_video_url_file(URL_FILE.read_text(encoding="utf-8"))
+        if not entries:
             raise ValueError(
                 f"{URL_FILE.name} 파일이 비어 있습니다. "
-                "요약할 유튜브 영상 URL을 한 줄로 적어두세요."
+                "'제목=URL' 형식으로 한 줄 이상 적어두세요."
             )
 
-        url_path = _normalize_youtube_url(url_path)
+        video_key = os.getenv("VIDEO_KEY")
+        if video_key:
+            if video_key not in entries:
+                available = ", ".join(entries.keys())
+                raise ValueError(
+                    f"VIDEO_KEY='{video_key}'는 {URL_FILE.name}에 없는 제목입니다. "
+                    f"사용 가능한 제목: {available}"
+                )
+            selected_url = entries[video_key]
+        elif len(entries) == 1:
+            selected_url = next(iter(entries.values()))
+        else:
+            available = ", ".join(entries.keys())
+            raise ValueError(
+                f"{URL_FILE.name}에 항목이 여러 개 있습니다. "
+                f".env에 VIDEO_KEY=<제목> 을 지정하세요. 사용 가능한 제목: {available}"
+            )
+
+        url_path = _normalize_youtube_url(selected_url)
 
         output_dir = BASE_DIR / "output"
         output_dir.mkdir(exist_ok=True)
