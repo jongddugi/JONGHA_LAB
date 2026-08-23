@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent
 URL_FILE = BASE_DIR / "VIDEO_URL.txt"
 
 
-def _normalize_youtube_url(url: str) -> str:
+def normalize_youtube_url(url: str) -> str:
     """다양한 형태의 유튜브 URL을 Gemini API가 요구하는
     'https://www.youtube.com/watch?v=<id>' 형식으로 통일한다.
 
@@ -40,7 +40,7 @@ def _normalize_youtube_url(url: str) -> str:
     if not video_id:
         raise ValueError(
             f"유튜브 URL에서 video id를 추출하지 못했습니다: {url}\n"
-            "VIDEO_URL.txt에 올바른 유튜브 링크가 들어있는지 확인하세요."
+            "입력한 URL이 올바른 유튜브 링크인지 확인하세요."
         )
 
     return f"https://www.youtube.com/watch?v={video_id}"
@@ -83,13 +83,13 @@ class Settings:
 
     api_key: str
     model_name: str
-    url_path: str
     output_dir: Path
 
     @classmethod
-    def load(cls, cli_url: str | None = None) -> "Settings":
-        """.env 파일에서 API 키를 읽고, 유튜브 URL은 cli_url(커맨드라인 인자)이
-        있으면 그걸 쓰고, 없으면 VIDEO_URL.txt + VIDEO_KEY 조합으로 읽는다.
+    def load(cls) -> "Settings":
+        """.env 파일에서 API 키와 모델명을 읽어 Settings 객체로 만든다.
+
+        분석할 유튜브 URL은 실행 시 CLI에서 직접 입력받으므로 여기서 다루지 않는다.
         """
         env_path = BASE_DIR / ".env"
         load_dotenv(dotenv_path=env_path)
@@ -103,64 +103,27 @@ class Settings:
 
         model_name = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
 
-        if cli_url:
-            url_path = _normalize_youtube_url(cli_url)
-        else:
-            if not URL_FILE.exists():
-                raise FileNotFoundError(
-                    f"{URL_FILE.name} 파일을 찾을 수 없습니다. "
-                    "이 파일을 만들고 '제목=URL' 형식으로 한 줄 이상 적거나, "
-                    "python main.py <유튜브URL> 형태로 URL을 직접 넘기세요."
-                )
-
-            entries = _parse_video_url_file(URL_FILE.read_text(encoding="utf-8"))
-            if not entries:
-                raise ValueError(
-                    f"{URL_FILE.name} 파일이 비어 있습니다. "
-                    "'제목=URL' 형식으로 한 줄 이상 적어두세요."
-                )
-
-            video_key = os.getenv("VIDEO_KEY")
-            if video_key:
-                if video_key not in entries:
-                    available = ", ".join(entries.keys())
-                    raise ValueError(
-                        f"VIDEO_KEY='{video_key}'는 {URL_FILE.name}에 없는 제목입니다. "
-                        f"사용 가능한 제목: {available}"
-                    )
-                selected_url = entries[video_key]
-            elif len(entries) == 1:
-                selected_url = next(iter(entries.values()))
-            else:
-                available = ", ".join(entries.keys())
-                raise ValueError(
-                    f"{URL_FILE.name}에 항목이 여러 개 있습니다. "
-                    f".env에 VIDEO_KEY=<제목> 을 지정하거나 "
-                    f"python main.py <유튜브URL> 로 직접 넘기세요. 사용 가능한 제목: {available}"
-                )
-            url_path = _normalize_youtube_url(selected_url)
-
         output_dir = BASE_DIR / "output"
         output_dir.mkdir(exist_ok=True)
 
         return cls(
             api_key=api_key,
             model_name=model_name,
-            url_path=url_path,
             output_dir=output_dir,
         )
 
 
 def record_video_entry(title: str, url: str) -> None:
-    """분석에 성공한 영상을 VIDEO_URL.txt에 '제목 = URL' 형식으로 기록한다.
+    """CLI로 입력받아 분석에 성공한 영상을 VIDEO_URL.txt에 '제목 = URL' 형식으로 기록한다.
 
-    지금까지 분석한 영상 목록을 누적해두는 용도이며,
+    지금까지 분석한 영상 목록을 누적해두는 용도(기록 전용, 조회/선택에는 쓰지 않음)이며,
     이미 같은 URL이 기록되어 있으면 중복 추가하지 않는다.
     """
     existing_text = URL_FILE.read_text(encoding="utf-8") if URL_FILE.exists() else ""
     existing_entries = _parse_video_url_file(existing_text)
 
-    if url in existing_entries.values():
+    existing_normalized_urls = {normalize_youtube_url(u) for u in existing_entries.values()}
+    if url in existing_normalized_urls:
         return
 
     key = title.strip() or "untitled"
