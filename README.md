@@ -28,12 +28,16 @@ youtube_lecture_summarizer/
   requirements.txt      필요한 패키지 목록
   .env.example          API 키 설정 예시
   .gitignore             git에 올리지 않을 파일 목록
-  VIDEO_URL.txt         지금까지 분석한 영상 기록 (제목 = URL, 자동 생성/기록됨)
+  archive_old_output.py 오래된 output 결과를 zip으로 정리하는 스크립트
+  VIDEO_URL.txt         지금까지 분석한 영상 카탈로그 (제목 = URL | 날짜 | 저장 경로, 자동 기록됨)
   VIDEO_URL_.txt.example VIDEO_URL.txt 형식 예시
   output/                결과 파일 저장 폴더 (git에는 올라가지 않음)
-    <영상 제목>/
-      lecture_summary.json
-      lecture_summary.md
+    <yy.mm.dd>/            분석 실행한 날짜별 폴더
+      <영상 제목>_<video id>/
+        lecture_summary.json
+        lecture_summary.md
+        meta.json          제목/URL/video id/분석 시각 메타데이터
+    archive/                archive_old_output.py로 정리된 결과 (zip)
 ```
 
 ## 설치 및 실행 방법
@@ -54,11 +58,24 @@ youtube_lecture_summarizer/
    >
    ```
    `youtu.be` 단축 링크, `shorts`/`embed`/`live` 링크도 입력하면 자동으로 표준 형식으로 변환됩니다.
-8. 실행이 끝나면 `output/<영상 제목>/lecture_summary.json`과
-   `output/<영상 제목>/lecture_summary.md`가 생성됩니다.
-9. 분석에 성공한 영상은 `VIDEO_URL.txt`에 `제목 = URL` 형식으로 자동 기록됩니다.
-   (직접 조회/수정할 필요 없는 로그 파일이며, 같은 영상을 다시 입력해도 중복 기록되지 않습니다.)
+8. 실행이 끝나면 `output/<yy.mm.dd>/<영상 제목>_<video id>/` 폴더에
+   `lecture_summary.json`, `lecture_summary.md`, `meta.json`(제목/URL/video id/분석 시각)이 생성됩니다.
+   폴더명에 video id를 붙여서 같은 날 같은 제목의 영상을 다시 분석해도 폴더가 겹치지 않습니다.
+9. 분석에 성공한 영상은 `VIDEO_URL.txt`에 `제목 = URL | 날짜 | 저장 경로` 형식으로 자동 기록됩니다.
+   (직접 조회/수정할 필요 없는 카탈로그이며, 같은 영상을 다시 입력해도 중복 기록되지 않습니다.)
 10. 작업을 마치면 `deactivate` 라고 입력해서 가상환경을 비활성화합니다.
+
+## output 정리
+
+`output/`에 결과가 많이 쌓이면 `archive_old_output.py`로 오래된 날짜 폴더를 zip으로 정리할 수 있습니다
+(자동 실행되지 않으며, 필요할 때 직접 실행합니다).
+
+```bash
+python3 archive_old_output.py              # 30일 지난 날짜 폴더 정리
+python3 archive_old_output.py --days 60    # 60일 기준으로 정리
+python3 archive_old_output.py --dry-run    # 실제로 옮기지 않고 대상만 확인
+```
+정리된 폴더는 `output/archive/<yy.mm.dd>.zip`으로 압축되고 원본 폴더는 삭제됩니다.
 
 ## 주의
 

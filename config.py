@@ -46,6 +46,17 @@ def normalize_youtube_url(url: str) -> str:
     return f"https://www.youtube.com/watch?v={video_id}"
 
 
+def extract_youtube_video_id(url: str) -> str | None:
+    """normalize_youtube_url()을 거친 URL에서 video id만 뽑아낸다.
+
+    유튜브 형식이 아닌 URL(File API/gs:// 등)이면 None을 반환한다.
+    """
+    parsed = urlparse(url)
+    if not parsed.netloc.endswith("youtube.com"):
+        return None
+    return parse_qs(parsed.query).get("v", [None])[0]
+
+
 def _parse_video_url_file(text: str) -> dict[str, str]:
     """'제목=URL' 형식의 줄들을 파싱해 {제목: URL} 딕셔너리로 만든다.
 
@@ -113,10 +124,12 @@ class Settings:
         )
 
 
-def record_video_entry(title: str, url: str) -> None:
-    """CLI로 입력받아 분석에 성공한 영상을 VIDEO_URL.txt에 '제목 = URL' 형식으로 기록한다.
+def record_video_entry(title: str, url: str, date_dir: str, output_path: Path) -> None:
+    """CLI로 입력받아 분석에 성공한 영상을 VIDEO_URL.txt에 기록한다.
 
-    지금까지 분석한 영상 목록을 누적해두는 용도(기록 전용, 조회/선택에는 쓰지 않음)이며,
+    형식: '제목 = URL | 날짜 | 저장 경로'
+    지금까지 분석한 영상의 날짜/저장 위치까지 한 파일에서 찾아볼 수 있는
+    카탈로그 용도(기록 전용, 조회/선택에는 쓰지 않음)이며,
     이미 같은 URL이 기록되어 있으면 중복 추가하지 않는다.
     """
     existing_text = URL_FILE.read_text(encoding="utf-8") if URL_FILE.exists() else ""
@@ -133,7 +146,12 @@ def record_video_entry(title: str, url: str) -> None:
         key = f"{base_key} ({suffix})"
         suffix += 1
 
+    try:
+        relative_path = output_path.relative_to(BASE_DIR)
+    except ValueError:
+        relative_path = output_path
+
     with URL_FILE.open("a", encoding="utf-8") as f:
         if existing_text and not existing_text.endswith("\n"):
             f.write("\n")
-        f.write(f"{key} = {url}\n")
+        f.write(f"{key} = {url} | {date_dir} | {relative_path}\n")
